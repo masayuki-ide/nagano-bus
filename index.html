@@ -1,0 +1,1538 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>長野市バス時刻</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=Noto+Serif+JP:wght@300;400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/papaparse/5.4.1/papaparse.min.js"></script>
+<style>
+:root {
+  --ink: #1a1a18;
+  --ink-mid: #5a5a55;
+  --ink-light: #9a9a94;
+  --ink-faint: #d8d8d2;
+  --paper: #f5f4f0;
+  --paper-warm: #eeede8;
+  --paper-mid: #e2e1db;
+  --rule: #d0cfc9;
+  --accent: #c8460a;
+  --accent-light: #f5e8e0;
+  --blue: #1a3a6e;
+  --green: #2a6040;
+  --col: 72px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+html { font-size: 15px; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'DM Sans', 'Noto Serif JP', sans-serif;
+  font-weight: 300;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── MASTHEAD ── */
+.masthead {
+  border-bottom: 2px solid var(--ink);
+  padding: 1.4rem 2.4rem 1rem;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
+  gap: 1rem;
+}
+
+.masthead-left {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-mid);
+}
+
+.masthead-title {
+  text-align: center;
+}
+
+.masthead-title h1 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 2.4rem;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.masthead-title .sub {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-mid);
+  margin-top: 0.3rem;
+  font-weight: 400;
+}
+
+.masthead-right {
+  text-align: right;
+}
+
+.live-time {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.8rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.live-date {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.65rem;
+  color: var(--ink-light);
+  margin-top: 0.2rem;
+  letter-spacing: 0.08em;
+}
+
+/* ── NAV ── */
+.nav-bar {
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  gap: 0;
+  background: var(--paper);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.nav-btn {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.75rem 1.8rem;
+  background: none;
+  border: none;
+  color: var(--ink-light);
+  cursor: pointer;
+  border-bottom: 1.5px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.nav-btn:hover { color: var(--ink); }
+.nav-btn.active { color: var(--ink); border-bottom-color: var(--ink); }
+
+/* ── PAGES ── */
+.page { display: none; }
+.page.active { display: block; }
+#page-map.active { display: flex; flex-direction: column; height: calc(100vh - 120px); }
+
+/* ── TIMETABLE LAYOUT ── */
+.tt-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: calc(100vh - 120px);
+}
+
+/* sidebar */
+.sidebar {
+  border-right: 1px solid var(--rule);
+  position: sticky;
+  top: 42px;
+  height: calc(100vh - 42px);
+  overflow-y: auto;
+  padding: 1.6rem 0;
+  background: var(--paper);
+}
+
+.sidebar::-webkit-scrollbar { width: 3px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--rule); }
+
+.sb-section { margin-bottom: 1.8rem; }
+
+.sb-heading {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.58rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-light);
+  padding: 0 1.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.sb-rule {
+  height: 1px;
+  background: var(--rule);
+  margin: 0 1.4rem 0.7rem;
+}
+
+.route-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.6rem 1.4rem;
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.route-btn:hover { background: var(--paper-warm); }
+.route-btn.active { background: var(--paper-mid); }
+
+.route-pip {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.route-btn-name {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--ink);
+  line-height: 1.35;
+}
+
+.route-btn-meta {
+  font-size: 0.6rem;
+  color: var(--ink-light);
+  letter-spacing: 0.05em;
+  margin-top: 0.05rem;
+}
+
+/* ── CONTENT ── */
+.content {
+  padding: 2rem 2.8rem;
+  max-width: 900px;
+}
+
+/* route title block */
+.route-eyebrow {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-light);
+  margin-bottom: 0.4rem;
+}
+
+.route-h {
+  font-family: 'DM Serif Display', serif;
+  font-size: 2.2rem;
+  font-weight: 400;
+  color: var(--ink);
+  line-height: 1.1;
+  margin-bottom: 0.5rem;
+}
+
+.route-meta-row {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  margin-bottom: 1.8rem;
+  padding-bottom: 1.2rem;
+  border-bottom: 1px solid var(--rule);
+  flex-wrap: wrap;
+}
+
+.meta-chip {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 400;
+  color: var(--ink-mid);
+  letter-spacing: 0.04em;
+}
+
+.meta-chip strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.live-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.62rem;
+  color: var(--green);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.live-dot::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
+
+/* next departure */
+.next-dep {
+  background: var(--paper-warm);
+  border: 1px solid var(--rule);
+  padding: 1.4rem 1.8rem;
+  margin-bottom: 2rem;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+.next-dep-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-light);
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+}
+
+.next-dep-time {
+  font-family: 'DM Serif Display', serif;
+  font-size: 4rem;
+  font-weight: 400;
+  color: var(--ink);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.next-dep-detail .stop-name {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.next-dep-detail .countdown {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.75rem;
+  color: var(--ink-mid);
+  margin-top: 0.3rem;
+  font-weight: 300;
+}
+
+.next-dep-fare {
+  text-align: right;
+}
+
+.fare-amount {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.5rem;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.fare-label {
+  font-size: 0.6rem;
+  color: var(--ink-light);
+  margin-top: 0.15rem;
+  letter-spacing: 0.06em;
+}
+
+/* stop selector */
+.stop-row {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.stop-row-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-light);
+  margin-right: 0.6rem;
+  white-space: nowrap;
+}
+
+.stop-pill {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 400;
+  padding: 0.3rem 0.85rem;
+  background: none;
+  border: 1px solid var(--rule);
+  color: var(--ink-mid);
+  cursor: pointer;
+  transition: all 0.15s;
+  border-radius: 999px;
+}
+.stop-pill:hover { border-color: var(--ink-mid); color: var(--ink); }
+.stop-pill.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+/* view toggle */
+.view-row {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1.2rem;
+}
+
+.view-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-light);
+}
+
+.view-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.view-opt {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 400;
+  padding: 0.28rem 0.75rem;
+  background: none;
+  border: none;
+  color: var(--ink-light);
+  cursor: pointer;
+  transition: all 0.12s;
+  border-right: 1px solid var(--rule);
+  letter-spacing: 0.06em;
+}
+.view-opt:last-child { border-right: none; }
+.view-opt:hover { color: var(--ink); background: var(--paper-warm); }
+.view-opt.active { background: var(--ink); color: var(--paper); }
+
+/* ── GRID VIEW ── */
+.hour-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.hour-table tr {
+  border-bottom: 1px solid var(--rule);
+}
+
+.hour-table tr:first-child { border-top: 1px solid var(--rule); }
+
+.h-num {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: var(--ink-light);
+  padding: 0.55rem 1.2rem 0.55rem 0;
+  text-align: right;
+  vertical-align: middle;
+  width: 60px;
+  border-right: 1px solid var(--rule);
+}
+.h-num.now { color: var(--ink); }
+
+.h-mins {
+  padding: 0.55rem 0 0.55rem 1.2rem;
+  vertical-align: middle;
+}
+
+.m-chip {
+  display: inline-block;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: var(--ink-mid);
+  padding: 0.18rem 0.5rem;
+  margin: 0.1rem 0.1rem;
+  cursor: pointer;
+  transition: all 0.1s;
+  border-radius: 3px;
+}
+.m-chip:hover { background: var(--paper-mid); color: var(--ink); }
+.m-chip.past { color: var(--ink-faint); }
+.m-chip.next {
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 3px;
+}
+.m-empty { color: var(--ink-faint); font-size: 0.75rem; padding-left: 0.4rem; }
+
+/* ── LIST VIEW ── */
+.tt-list {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tt-list thead th {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-light);
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+  border-bottom: 1.5px solid var(--ink);
+}
+
+.tt-list tbody tr { border-bottom: 1px solid var(--rule); transition: background 0.1s; }
+.tt-list tbody tr:hover { background: var(--paper-warm); }
+.tt-list tbody tr.past td { color: var(--ink-faint); }
+.tt-list tbody tr.is-next { background: var(--accent-light); }
+
+.tt-list td {
+  padding: 0.55rem 0.6rem;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 300;
+  color: var(--ink);
+}
+
+.td-time {
+  font-family: 'DM Serif Display', serif !important;
+  font-size: 1.05rem !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.02em;
+}
+
+.next-badge {
+  display: inline-block;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.52rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: var(--accent);
+  color: white;
+  padding: 0.08rem 0.4rem;
+  border-radius: 2px;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+/* ── INFO FOOTER ── */
+.info-footer {
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0;
+}
+
+.info-col {
+  padding: 0.8rem 1rem 0.8rem 0;
+  border-right: 1px solid var(--rule);
+}
+.info-col:last-child { border-right: none; padding-right: 0; }
+.info-col:first-child { padding-left: 0; }
+
+.info-k {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.58rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-light);
+  margin-bottom: 0.3rem;
+}
+
+.info-v {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem;
+  color: var(--ink);
+  font-weight: 400;
+}
+
+/* ── MAP PAGE ── */
+#mapContainer {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+}
+
+#map { width: 100%; height: 100%; }
+
+/* Leaflet light-mode tiles look great, just desaturate slightly */
+.leaflet-tile { filter: saturate(0.7) brightness(1.02); }
+.leaflet-container { background: var(--paper-warm); }
+
+.leaflet-popup-content-wrapper {
+  background: var(--paper) !important;
+  border-radius: 2px !important;
+  border: 1px solid var(--rule) !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12) !important;
+  color: var(--ink) !important;
+}
+.leaflet-popup-tip { background: var(--paper) !important; }
+.popup-name { font-family:'DM Serif Display',serif; font-size:1rem; margin-bottom:0.3rem; color:var(--ink); }
+.popup-route { font-size:0.7rem; color:var(--ink-mid); margin-bottom:0.3rem; font-family:'DM Sans',sans-serif; }
+.popup-next { font-family:'DM Serif Display',serif; font-size:0.95rem; color:var(--accent); margin-bottom:0.5rem; }
+.popup-link { font-family:'DM Sans',sans-serif; font-size:0.65rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--blue); cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
+
+/* nearby panel */
+.nearby-panel {
+  border-top: 2px solid var(--ink);
+  background: var(--paper);
+  height: 195px;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.nearby-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0.8rem 1.8rem 0.5rem;
+  border-bottom: 1px solid var(--rule);
+  flex-shrink: 0;
+}
+
+.nearby-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+.nearby-sub {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.62rem;
+  color: var(--ink-light);
+  letter-spacing: 0.08em;
+}
+
+.loc-btn {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--blue);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.nearby-scroll {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+  padding: 0;
+}
+
+.nearby-scroll::-webkit-scrollbar { height: 2px; }
+.nearby-scroll::-webkit-scrollbar-thumb { background: var(--rule); }
+
+.nearby-card {
+  flex-shrink: 0;
+  width: 190px;
+  padding: 0.8rem 1.2rem;
+  border-right: 1px solid var(--rule);
+  cursor: pointer;
+  transition: background 0.1s;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.nearby-card:hover { background: var(--paper-warm); }
+.nearby-card.hl { background: var(--paper-mid); }
+
+.nc-stop {
+  font-family: 'DM Serif Display', serif;
+  font-size: 0.95rem;
+  color: var(--ink);
+  margin-bottom: 0.2rem;
+  line-height: 1.2;
+}
+
+.nc-route {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.6rem;
+  color: var(--ink-light);
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+
+.nc-next {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.1rem;
+  color: var(--accent);
+}
+
+.nc-dist {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.58rem;
+  color: var(--ink-light);
+  margin-top: 0.2rem;
+  letter-spacing: 0.05em;
+}
+
+/* map fab */
+.map-fab {
+  position: absolute;
+  bottom: 205px;
+  right: 14px;
+  z-index: 110;
+  width: 40px;
+  height: 40px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  transition: border-color 0.15s;
+  border-radius: 2px;
+}
+.map-fab:hover { border-color: var(--ink-mid); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 720px) {
+  .masthead { grid-template-columns: 1fr; text-align: center; padding: 1rem; gap: 0.3rem; }
+  .masthead-left, .masthead-right { display: none; }
+  .masthead-title h1 { font-size: 1.8rem; }
+  .tt-layout { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; max-height: 180px; border-right: none; border-bottom: 1px solid var(--rule); }
+  .content { padding: 1.2rem; }
+  .next-dep { grid-template-columns: 1fr; gap: 0.5rem; }
+  .next-dep-label { writing-mode: horizontal-tb; transform: none; }
+  .next-dep-time { font-size: 3rem; }
+  .nearby-panel { height: 180px; }
+}
+
+.fade-in { animation: fi 0.2s ease; }
+@keyframes fi { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── FAVORITES ── */
+#page-fav { padding-bottom: 4rem; }
+.fav-hero { padding: 2rem 2.4rem 0; border-bottom: 1px solid var(--rule); display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.fav-hero-title { font-family: 'DM Serif Display', serif; font-size: 1.6rem; color: var(--ink); padding-bottom: 1rem; }
+.fav-hint { font-family: 'DM Sans', sans-serif; font-size: 0.68rem; color: var(--ink-light); letter-spacing: 0.05em; padding-bottom: 1rem; }
+.fav-list { max-width: 860px; margin: 0 auto; padding: 0 2rem; }
+.fav-card { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 1rem; padding: 1.2rem 0; border-bottom: 1px solid var(--rule); }
+.fav-stop-name { font-family: 'DM Serif Display', serif; font-size: 1.15rem; color: var(--ink); margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.5rem; }
+.fav-route-name { font-family: 'DM Sans', sans-serif; font-size: 0.72rem; color: var(--ink-light); margin-bottom: 0.5rem; }
+.fav-next { font-family: 'DM Serif Display', serif; font-size: 1.5rem; color: var(--accent); line-height: 1; }
+.fav-next-sub { font-family: 'DM Sans', sans-serif; font-size: 0.7rem; color: var(--ink-mid); margin-top: 0.1rem; }
+.fav-card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; }
+.fav-go-btn { font-family: 'DM Sans', sans-serif; font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--blue); background: none; border: none; cursor: pointer; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
+.fav-remove-btn { font-size: 0.75rem; color: var(--ink-light); background: none; border: none; cursor: pointer; padding: 0.1rem 0.3rem; transition: color 0.15s; }
+.fav-remove-btn:hover { color: var(--accent); }
+.fav-empty { text-align: center; padding: 5rem 2rem; }
+.fav-empty-icon { font-size: 2.5rem; margin-bottom: 1rem; opacity: 0.3; }
+.fav-empty-title { font-family: 'DM Serif Display', serif; font-size: 1.2rem; color: var(--ink-mid); margin-bottom: 0.5rem; }
+.fav-empty-body { font-family: 'DM Sans', sans-serif; font-size: 0.78rem; color: var(--ink-light); line-height: 1.7; }
+.fav-toggle-btn { display: inline-flex; align-items: center; gap: 0.4rem; font-family: 'DM Sans', sans-serif; font-size: 0.68rem; letter-spacing: 0.08em; padding: 0.35rem 0.8rem; border: 1px solid var(--rule); background: none; color: var(--ink-mid); cursor: pointer; transition: all 0.15s; border-radius: 2px; }
+.fav-toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+.fav-toggle-btn.is-fav { background: var(--accent-light); border-color: var(--accent); color: var(--accent); }
+
+/* ── LOADING OVERLAY ── */
+#loading-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: var(--paper); z-index: 9999;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  transition: opacity 0.4s ease, visibility 0.4s;
+}
+#loading-overlay.hidden { opacity: 0; visibility: hidden; }
+.spinner {
+  width: 40px; height: 40px; border: 3px solid var(--rule);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin 1s linear infinite; margin-bottom: 1.5rem;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-family: 'DM Serif Display', serif; font-size: 1.5rem; color: var(--ink); margin-bottom: 0.5rem; }
+.loading-sub { font-family: 'DM Sans', sans-serif; font-size: 0.75rem; color: var(--ink-light); letter-spacing: 0.1em; }
+</style>
+</head>
+<body>
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-text">長野市バス時刻</div>
+  <div class="loading-sub" id="loading-status">最新の時刻表データを取得中...</div>
+</div>
+
+<!-- MASTHEAD -->
+<header>
+  <div class="masthead">
+    <div class="masthead-left">長野市市営バス<br>時刻案内 — Open Data</div>
+    <div class="masthead-title">
+      <h1>長野市バス</h1>
+      <div class="sub">Nagano City Bus Timetable</div>
+    </div>
+    <div class="masthead-right">
+      <div class="live-time" id="clock">--:--</div>
+      <div class="live-date" id="datestr">---</div>
+    </div>
+  </div>
+</header>
+
+<!-- NAV -->
+<nav class="nav-bar">
+  <button class="nav-btn active" onclick="switchTab('timetable',this)">時刻表</button>
+  <button class="nav-btn" onclick="switchTab('map',this)">地図 · 近くのバス停</button>
+  <button class="nav-btn" onclick="switchTab('fav',this)">★ お気に入り</button>
+</nav>
+
+<!-- TIMETABLE PAGE -->
+<div id="page-timetable" class="page active">
+  <div class="tt-layout">
+
+    <nav class="sidebar">
+      <div class="sb-section">
+        <div class="sb-heading">循環バス</div>
+        <div class="sb-rule"></div>
+        <button class="route-btn active" onclick="selectRoute('gururi-center')" id="r-gururi-center">
+          <div class="route-pip" style="background:#2a6040"></div>
+          <div><div class="route-btn-name">中心市街地ぐるりん号</div><div class="route-btn-meta">Loop · 190円</div></div>
+        </button>
+        <button class="route-btn" onclick="selectRoute('gururi-tohoku')" id="r-gururi-tohoku">
+          <div class="route-pip" style="background:#1a3a6e"></div>
+          <div><div class="route-btn-name">東北ぐるりん号</div><div class="route-btn-meta">Loop · 190円</div></div>
+        </button>
+        <button class="route-btn" onclick="selectRoute('gururi-shinonoi')" id="r-gururi-shinonoi">
+          <div class="route-pip" style="background:#7a4010"></div>
+          <div><div class="route-btn-name">篠ノ井ぐるりん号</div><div class="route-btn-meta">Loop · 190円</div></div>
+        </button>
+      </div>
+
+      <div class="sb-section">
+        <div class="sb-heading">乗合タクシー</div>
+        <div class="sb-rule"></div>
+        <button class="route-btn" onclick="selectRoute('wakasato')" id="r-wakasato">
+          <div class="route-pip" style="background:#8a2030"></div>
+          <div><div class="route-btn-name">若里更北線</div><div class="route-btn-meta">Shared Taxi · 200円</div></div>
+        </button>
+        <button class="route-btn" onclick="selectRoute('nishi-nagano')" id="r-nishi-nagano">
+          <div class="route-pip" style="background:#5a2080"></div>
+          <div><div class="route-btn-name">西長野上松線</div><div class="route-btn-meta">Shared Taxi · 200円</div></div>
+        </button>
+        <button class="route-btn" onclick="selectRoute('kawanakajima')" id="r-kawanakajima">
+          <div class="route-pip" style="background:#806010"></div>
+          <div><div class="route-btn-name">川中島線</div><div class="route-btn-meta">Shared Taxi · 200円</div></div>
+        </button>
+        <button class="route-btn" onclick="selectRoute('shinonoi-kyowa')" id="r-shinonoi-kyowa">
+          <div class="route-pip" style="background:#106060"></div>
+          <div><div class="route-btn-name">篠ノ井共和線</div><div class="route-btn-meta">Shared Taxi · 200円</div></div>
+        </button>
+        <button class="route-btn" onclick="selectRoute('yokota')" id="r-yokota">
+          <div class="route-pip" style="background:#802050"></div>
+          <div><div class="route-btn-name">横田塩崎線</div><div class="route-btn-meta">Shared Taxi · 200円</div></div>
+        </button>
+        <button class="route-btn" onclick="selectRoute('amori')" id="r-amori">
+          <div class="route-pip" style="background:#206030"></div>
+          <div><div class="route-btn-name">安茂里線</div><div class="route-btn-meta">Shared Taxi · 200円</div></div>
+        </button>        <button class="route-btn" onclick="selectRoute('matsushiro-saijo')" id="r-matsushiro-saijo">
+          <div class="route-pip" style="background:#a03060"></div>
+          <div><div class="route-btn-name">松代西条線</div><div class="route-btn-meta">Shared Taxi · 200円</div></div>
+        </button>
+        <button class="route-btn" onclick="selectRoute('omuro')" id="r-omuro">
+          <div class="route-pip" style="background:#207050"></div>
+          <div><div class="route-btn-name">大室線</div><div class="route-btn-meta">Shared Taxi · 200円</div></div>
+        </button>
+        <button class="route-btn" onclick="selectRoute('watauchi')" id="r-watauchi">
+          <div class="route-pip" style="background:#305090"></div>
+          <div><div class="route-btn-name">綿内線</div><div class="route-btn-meta">Shared Taxi · 200円</div></div>
+        </button>
+        <button class="route-btn" onclick="selectRoute('naganuma')" id="r-naganuma">
+          <div class="route-pip" style="background:#806030"></div>
+          <div><div class="route-btn-name">長沼線</div><div class="route-btn-meta">Shared Taxi · 200円</div></div>
+        </button>
+        <button class="route-btn" onclick="selectRoute('kawayu')" id="r-kawayu">
+          <div class="route-pip" style="background:#508020"></div>
+          <div><div class="route-btn-name">川谷線</div><div class="route-btn-meta">Shared Taxi · 200円</div></div>
+        </button>
+        <button class="route-btn" onclick="selectRoute('futatsushi')" id="r-futatsushi">
+          <div class="route-pip" style="background:#204060"></div>
+          <div><div class="route-btn-name">二ツ石線</div><div class="route-btn-meta">Shared Taxi · 200円</div></div>
+        </button>
+        <button class="route-btn" onclick="selectRoute('murei')" id="r-murei">
+          <div class="route-pip" style="background:#602080"></div>
+          <div><div class="route-btn-name">牟礼線</div><div class="route-btn-meta">Shared Taxi · 200円</div></div>
+        </button>
+        <button class="route-btn" onclick="selectRoute('imochokushi')" id="r-imochokushi">
+          <div class="route-pip" style="background:#804020"></div>
+          <div><div class="route-btn-name">芋井銚子口線</div><div class="route-btn-meta">Shared Taxi · 200円</div></div>
+        </button>
+        <button class="route-btn" onclick="selectRoute('shinonoi-shinmachi')" id="r-shinonoi-shinmachi">
+          <div class="route-pip" style="background:#106040"></div>
+          <div><div class="route-btn-name">篠ノ井新町線</div><div class="route-btn-meta">Shared Taxi · 200円</div></div>
+        </button>
+        <button class="route-btn" onclick="selectRoute('ozu')" id="r-ozu">
+          <div class="route-pip" style="background:#504010"></div>
+          <div><div class="route-btn-name">大豆島線</div><div class="route-btn-meta">Shared Taxi · 200円</div></div>
+        </button>
+        <button class="route-btn" onclick="selectRoute('kawata-hoshionsen')" id="r-kawata-hoshionsen">
+          <div class="route-pip" style="background:#305060"></div>
+          <div><div class="route-btn-name">川田保科温泉線</div><div class="route-btn-meta">Shared Taxi · 200円</div></div>
+        </button>
+      </div>
+    </nav>
+
+    <main class="content fade-in" id="mainContent"></main>
+  </div>
+</div>
+
+<!-- MAP PAGE -->
+<div id="page-map" class="page">
+  <div id="mapContainer">
+    <div id="map"></div>
+    <button class="map-fab" onclick="locateUser()" title="現在地">⊙</button>
+  </div>
+  <div class="nearby-panel">
+    <div class="nearby-head">
+      <div>
+        <div class="nearby-title">近くのバス停</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:1.2rem">
+        <span class="nearby-sub" id="nearbyDistLabel">位置情報を取得中...</span>
+        <button class="loc-btn" onclick="locateUser()">現在地を更新</button>
+      </div>
+    </div>
+    <div class="nearby-scroll" id="nearbyCards">
+      <div style="padding:1rem 1.8rem;color:var(--ink-light);font-size:0.8rem;font-family:'DM Sans',sans-serif">「地図」タブを開くと現在地の近くのバス停が表示されます</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- FAVORITES PAGE -->
+<div id="page-fav" class="page">
+  <div class="fav-hero">
+    <div class="fav-hero-title">お気に入りバス停</div>
+    <div class="fav-hint">時刻表の★ボタンで登録。端末に保存されます。</div>
+  </div>
+  <div class="fav-list" id="favList"></div>
+</div>
+
+<script>
+// ── CONFIG ──
+const GTFS_URL = 'https://api.gtfs-data.jp/v2/organizations/naganocity/feeds/shiei_noriaibus/files/feed.zip?rid=current';
+const PROXIES = [
+  'https://corsproxy.io/?',
+  'https://api.allorigins.win/raw?url='
+];
+
+// ── DATA STATE ──
+let ROUTES = {};
+let STOPS = [];
+
+// ── LOADER ──
+async function initApp() {
+  const statusEl = document.getElementById('loading-status');
+  try {
+    const cachedData = localStorage.getItem('nagano_bus_data_v1');
+    const cachedTime = localStorage.getItem('nagano_bus_data_time');
+    const now = Date.now();
+
+    // 1週間（7日間）はキャッシュを使用
+    if (cachedData && cachedTime && (now - cachedTime < 7 * 24 * 60 * 60 * 1000)) {
+      statusEl.textContent = 'キャッシュからデータを読み込み中...';
+      const data = JSON.parse(cachedData);
+      ROUTES = data.routes;
+      STOPS = data.stops;
+    } else {
+      statusEl.textContent = '最新のデータを取得中...';
+      const data = await fetchAndParseGTFS();
+      ROUTES = data.routes;
+      STOPS = data.stops;
+      localStorage.setItem('nagano_bus_data_v1', JSON.stringify(data));
+      localStorage.setItem('nagano_bus_data_time', now.toString());
+    }
+    
+    // UI初期化
+    renderSidebar();
+    const firstRoute = Object.keys(ROUTES)[0];
+    if (firstRoute) selectRoute(firstRoute);
+    
+    // ローディング解除
+    document.getElementById('loading-overlay').classList.add('hidden');
+  } catch (err) {
+    console.error('Failed to init app:', err);
+    statusEl.innerHTML = `データの取得に失敗しました。<br><small style="font-size:0.7rem;opacity:0.8;font-weight:normal">${err.message}</small><br><button onclick="location.reload()" style="margin-top:1rem;background:var(--accent);color:white;border:none;padding:5px 15px;cursor:pointer;font-family:inherit">再読み込み</button>`;
+    statusEl.style.color = 'var(--accent)';
+  }
+}
+
+async function fetchAndParseGTFS() {
+  const statusEl = document.getElementById('loading-status');
+  let response = null;
+  
+  // Try direct fetch first, then fallbacks
+  const fetchTargets = [
+    GTFS_URL,
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(GTFS_URL),
+    'https://corsproxy.io/?' + encodeURIComponent(GTFS_URL)
+  ];
+
+  for (let i = 0; i < fetchTargets.length; i++) {
+    try {
+      const mode = i === 0 ? "直接接続" : `プロキシ ${i} 経由`;
+      statusEl.textContent = `接続を試行中 (${mode})...`;
+      response = await fetch(fetchTargets[i]);
+      if (response.ok) break;
+    } catch (e) {
+      console.warn(`Fetch attempt ${i} failed:`, e);
+    }
+  }
+
+  if (!response || !response.ok) {
+    const isLocalFile = location.protocol === 'file:';
+    let msg = '通信エラーが発生しました。インターネット接続や、オープンデータサーバーの稼働状況を確認してください。';
+    if (isLocalFile) {
+      msg += '<br><br><div style="font-size:0.75rem; color:var(--ink); background:var(--accent-light); padding:1rem; border-radius:4px; max-width:400px; margin:0 auto; font-weight:normal; line-height:1.6; text-align:left;">' +
+             '<strong>【重要】ブラウザの制限について</strong><br>' +
+             '現在、ファイルを直接開いている（file://）ため、ブラウザのセキュリティ制限（CORS）によりデータの取得がブロックされている可能性があります。' +
+             'VSCodeの「Live Server」拡張機能などを使用し、<strong>ローカルサーバー経由（http://）</strong>で開くと正常に動作する場合があります。' +
+             '</div>';
+    }
+    throw new Error(msg);
+  }
+
+  statusEl.textContent = 'データを解凍しています...';
+  const arrayBuffer = await response.arrayBuffer();
+  const zip = await JSZip.loadAsync(arrayBuffer);
+
+  const getCSV = async (filename) => {
+    const file = zip.file(filename);
+    if (!file) return [];
+    const text = await file.async('text');
+    return Papa.parse(text, { header: true, skipEmptyLines: true }).data;
+  };
+
+  statusEl.textContent = 'CSVファイルを読み込み中...';
+  const [rRaw, sRaw, tRaw, stRaw] = await Promise.all([
+    getCSV('routes.txt'),
+    getCSV('stops.txt'),
+    getCSV('trips.txt'),
+    getCSV('stop_times.txt')
+  ]);
+
+  statusEl.textContent = 'アプリ形式に変換しています...';
+  // 1. Build Stops
+  const stopsTemp = sRaw.map(s => ({
+    id: s.stop_id,
+    name: s.stop_name || s.stop_id,
+    lat: parseFloat(s.stop_lat),
+    lng: parseFloat(s.stop_lon),
+    rids: []
+  }));
+
+  // 2. Build Routes
+  const routesTemp = {};
+  rRaw.forEach(r => {
+    routesTemp[r.route_id] = {
+      name: r.route_long_name || r.route_short_name || r.route_id,
+      nameEn: r.route_id,
+      pip: (r.route_color && r.route_color.length === 6) ? '#' + r.route_color : '#888888',
+      type: r.route_desc || 'バス',
+      fare: '運賃表参照',
+      days: '運行日設定参照',
+      note: '',
+      weekday: {}
+    };
+  });
+
+  // Index maps for speed
+  const tripToRoute = {};
+  tRaw.forEach(t => { tripToRoute[t.trip_id] = t.route_id; });
+
+  const stopIdToName = {};
+  stopsTemp.forEach(s => { stopIdToName[s.id] = s.name; });
+
+  function STOPS_find(list, id) {
+    for(let i=0; i<list.length; i++) {
+        if (list[i].id === id) return list[i];
+    }
+    return null;
+  }
+
+  // 3. Process Stop Times
+  stRaw.forEach(st => {
+    const rid = tripToRoute[st.trip_id];
+    if (!rid) return;
+    
+    const stopObj = STOPS_find(stopsTemp, st.stop_id);
+    if (stopObj && !stopObj.rids.includes(rid)) stopObj.rids.push(rid);
+
+    const sName = stopIdToName[st.stop_id];
+    if (!routesTemp[rid].weekday[sName]) routesTemp[rid].weekday[sName] = [];
+    
+    if (st.departure_time) {
+        const parts = st.departure_time.split(':');
+        if (parts.length >= 2) {
+            const h = parseInt(parts[0]);
+            const m = parseInt(parts[1]);
+            if (!routesTemp[rid].weekday[sName].some(t => t.h === h && t.m === m)) {
+              routesTemp[rid].weekday[sName].push({ h, m });
+            }
+        }
+    }
+  });
+
+  Object.values(routesTemp).forEach(r => {
+    Object.values(r.weekday).forEach(times => {
+      times.sort((a, b) => (a.h * 60 + a.m) - (b.h * 60 + b.m));
+    });
+  });
+
+  return { routes: routesTemp, stops: stopsTemp.filter(s => s.rids.length > 0) };
+}
+
+function renderSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar) return;
+  sidebar.innerHTML = '';
+  
+  // Categorize
+  const categories = {
+    '循環バス': [],
+    '乗合タクシー': [],
+    'その他': []
+  };
+
+  Object.entries(ROUTES).forEach(([id, r]) => {
+    if (r.name.includes('ぐるりん')) categories['循環バス'].push({id, r});
+    else if (r.name.includes('タクシー') || r.name.includes('線') || r.type.includes('タクシー')) categories['乗合タクシー'].push({id, r});
+    else categories['その他'].push({id, r});
+  });
+
+  Object.entries(categories).forEach(([name, items]) => {
+    if (items.length === 0) return;
+    const section = document.createElement('div');
+    section.className = 'sb-section';
+    section.innerHTML = `
+      <div class="sb-heading">${name}</div>
+      <div class="sb-rule"></div>
+    `;
+    items.forEach(item => {
+      const btn = document.createElement('button');
+      btn.className = 'route-btn';
+      btn.id = 'r-' + item.id;
+      btn.onclick = () => selectRoute(item.id);
+      btn.innerHTML = `
+        <div class="route-pip" style="background:${item.r.pip}"></div>
+        <div>
+          <div class="route-btn-name">${item.r.name}</div>
+          <div class="route-btn-meta">${item.r.type}</div>
+        </div>
+      `;
+      section.appendChild(btn);
+    });
+    sidebar.appendChild(section);
+  });
+}
+
+// ── STATE ──
+let curRoute = '', curStop = null, curView = 'grid';
+let mapObj = null, userMk = null, stopMks = [], mapReady = false;
+let uLat = 36.6445, uLng = 138.1882;
+
+// ── CLOCK ──
+function p(n){return String(n).padStart(2,'0');}
+function tick(){
+  const clockEl = document.getElementById('clock');
+  const dateEl = document.getElementById('datestr');
+  if (!clockEl || !dateEl) return;
+  const d=new Date();
+  clockEl.textContent=`${p(d.getHours())}:${p(d.getMinutes())}`;
+  const days=['日','月','火','水','木','金','土'];
+  dateEl.textContent=`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;
+}
+setInterval(tick,1000); tick();
+
+// ── TABS ──
+function switchTab(tab,btn){
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+tab).classList.add('active');
+  if(tab==='map') setTimeout(initMap, 80);
+  if(tab==='fav') renderFavPage();
+}
+
+// ── HELPERS ──
+function nextBus(times){
+  if (!times) return null;
+  const d=new Date(),c=d.getHours()*60+d.getMinutes();
+  return times.find(t=>t.h*60+t.m>c)||null;
+}
+function mUntil(t){const d=new Date();return(t.h*60+t.m)-(d.getHours()*60+d.getMinutes());}
+function haversine(a,b,c,e){
+  const R=6371000,dL=(c-a)*Math.PI/180,dG=(e-b)*Math.PI/180,
+        x=Math.sin(dL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dG/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+
+// ── MAP ──
+function initMap(){
+  if(!ROUTES || Object.keys(ROUTES).length === 0) return;
+  if(mapReady){if(mapObj)mapObj.invalidateSize();return;}
+  mapReady=true;
+  mapObj=L.map('map',{center:[uLat,uLng],zoom:13});
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(mapObj);
+  drawStopMarkers();
+  placeUser(uLat,uLng);
+  renderNearby(uLat,uLng);
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(pos=>{
+      uLat=pos.coords.latitude; uLng=pos.coords.longitude;
+      placeUser(uLat,uLng);
+      mapObj.setView([uLat,uLng],14);
+      renderNearby(uLat,uLng);
+    },()=>{});
+  }
+}
+
+function locateUser(){
+  if(!mapReady){initMap();return;}
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(pos=>{
+      uLat=pos.coords.latitude; uLng=pos.coords.longitude;
+      placeUser(uLat,uLng);
+      mapObj.setView([uLat,uLng],15);
+      renderNearby(uLat,uLng);
+    },()=>{if(mapObj)mapObj.setView([uLat,uLng],14);});
+  }
+}
+
+function placeUser(lat,lng){
+  if(!mapObj) return;
+  if(userMk) mapObj.removeLayer(userMk);
+  userMk=L.marker([lat,lng],{icon:L.divIcon({className:'',
+    html:`<div style="width:12px;height:12px;background:#c8460a;border-radius:50%;border:2px solid white;box-shadow:0 0 0 4px rgba(200,70,10,0.2)"></div>`,
+    iconSize:[12,12],iconAnchor:[6,6]
+  })}).addTo(mapObj).bindPopup('<div style="font-family:DM Sans,sans-serif;font-size:0.75rem;color:#1a1a18">現在地</div>');
+}
+
+function drawStopMarkers(){
+  if (!mapObj) return;
+  stopMks.forEach(m=>mapObj.removeLayer(m));
+  stopMks=[];
+  STOPS.forEach(s=>{
+    const rid = s.rids[0];
+    const r=ROUTES[rid]; const col=r?r.pip:'#888';
+    const times=r&&r.weekday[s.name]?r.weekday[s.name]:[];
+    const nx=nextBus(times);
+    const nxStr=nx?`${p(nx.h)}:${p(nx.m)}（あと${mUntil(nx)}分）`:'本日終了';
+    const m=L.marker([s.lat,s.lng],{icon:L.divIcon({className:'',
+      html:`<div style="width:9px;height:9px;background:${col};border-radius:50%;border:1.5px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.2)"></div>`,
+      iconSize:[9,9],iconAnchor:[4.5,4.5]
+    })}).addTo(mapObj);
+    m.bindPopup(`<div style="min-width:150px;font-family:'DM Sans',sans-serif">
+      <div class="popup-name">${s.name}</div>
+      <div class="popup-route">${s.rids.map(id=>ROUTES[id]?.name||id).join('<br>')}</div>
+      <div class="popup-next">${nxStr}</div>
+      <span class="popup-link" onclick="goRoute('${rid}','${s.name}')">時刻表を見る →</span>
+    </div>`);
+    stopMks.push(m); s._m=m;
+  });
+}
+
+function goRoute(rid,sname){
+  const btn = document.querySelectorAll('.nav-btn')[0];
+  if(btn) btn.click();
+  setTimeout(()=>selectRoute(rid,sname),50);
+}
+
+function renderNearby(lat,lng){
+  if (STOPS.length === 0) return;
+  const sorted=STOPS.map(s=>({...s,d:haversine(lat,lng,s.lat,s.lng)})).sort((a,b)=>a.d-b.d).slice(0,8);
+  const label = document.getElementById('nearbyDistLabel');
+  if (label) label.textContent=`現在地から最寄り順`;
+  const cards = document.getElementById('nearbyCards');
+  if (!cards) return;
+  cards.innerHTML=sorted.map((s,i)=>{
+    const rid = s.rids[0];
+    const r=ROUTES[rid]; const col=r?r.pip:'#888';
+    const times=r&&r.weekday[s.name]?r.weekday[s.name]:[];
+    const nx=nextBus(times);
+    const nxStr=nx?`${p(nx.h)}:${p(nx.m)}`:'終了';
+    const mu = nx?mUntil(nx):0;
+    const mStr=nx?`あと${mu}分`:'';
+    const dStr=s.d<1000?`${Math.round(s.d)} m`:`${(s.d/1000).toFixed(1)} km`;
+    return `<div class="nearby-card ${i===0?'hl':''}" onclick="focusStop('${s.id}',this)">
+      <div>
+        <div class="nc-stop"><span style="display:inline-block;width:6px;height:6px;background:${col};border-radius:50%;margin-right:5px;vertical-align:middle;position:relative;top:-1px"></span>${s.name}</div>
+        <div class="nc-route">${s.rids.map(id=>ROUTES[id]?.name||id).join('<br>')}</div>
+      </div>
+      <div>
+        <div class="nc-next">${nxStr} <span style="font-family:'DM Sans',sans-serif;font-size:0.68rem;color:var(--ink-mid)">${mStr}</span></div>
+        <div class="nc-dist">📍 ${dStr}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function focusStop(id,el){
+  const s=STOPS_find_by_id(STOPS, id);
+  if(!s||!mapObj) return;
+  mapObj.setView([s.lat,s.lng],16);
+  if(s._m) s._m.openPopup();
+  document.querySelectorAll('.nearby-card').forEach(c=>c.classList.remove('hl'));
+  if(el) el.classList.add('hl');
+}
+function STOPS_find_by_id(list, id) {
+    for(let i=0; i<list.length; i++) {
+        if (list[i].id === id) return list[i];
+    }
+    return null;
+}
+
+// ── TIMETABLE ──
+function selectRoute(id,sname){
+  document.querySelectorAll('.route-btn').forEach(e=>e.classList.remove('active'));
+  const el=document.getElementById('r-'+id);
+  if(el) el.classList.add('active');
+  curRoute=id; curStop=sname||null;
+  renderContent();
+}
+
+function renderContent(){
+  const r=ROUTES[curRoute];
+  if (!r) return;
+  const mc=document.getElementById('mainContent');
+  if (!mc) return;
+  mc.className='content fade-in';
+  void mc.offsetHeight;
+  const sNames=Object.keys(r.weekday);
+  if(!curStop||!sNames.includes(curStop)) curStop=sNames[0];
+  const times=r.weekday[curStop]||[];
+  const d=new Date(),cH=d.getHours(),cM=d.getMinutes();
+  const nx=nextBus(times);
+  const mu=nx?mUntil(nx):null;
+
+  // hour grid
+  const hMap={};
+  times.forEach(t=>{if(!hMap[t.h])hMap[t.h]=[];hMap[t.h].push(t.m);});
+  const minH=times.length?times[0].h:5, maxH=times.length?times[times.length-1].h:23;
+  let grid=`<table class="hour-table">`;
+  for(let h=minH;h<=maxH;h++){
+    const mins=hMap[h]||[];
+    grid+=`<tr><td class="h-num ${h===cH?'now':''}">${p(h)}</td><td class="h-mins">
+      ${mins.length?mins.map(m=>{
+        const past=h<cH||(h===cH&&m<=cM),isN=nx&&h===nx.h&&m===nx.m;
+        return`<span class="m-chip ${past?'past':''} ${isN?'next':''}">${p(m)}</span>`;
+      }).join(''):'<span class="m-empty">運行なし</span>'}
+    </td></tr>`;
+  }
+  grid+='</table>';
+
+  // list view
+  let list=`<div style="overflow-x:auto"><table class="tt-list"><thead><tr><th>発車時刻</th><th>バス停</th><th>運賃</th></tr></thead><tbody>`;
+  times.forEach(t=>{
+    const past=t.h<cH||(t.h===cH&&t.m<=cM),isN=nx&&t.h===nx.h&&t.m===nx.m;
+    list+=`<tr class="${past?'past':''} ${isN?'is-next':''}"><td class="td-time">${p(t.h)}:${p(t.m)}${isN?'<span class="next-badge">次発</span>':''}</td><td>${curStop}</td><td style="color:var(--ink-mid)">${r.fare}</td></tr>`;
+  });
+  list+='</tbody></table></div>';
+
+  mc.innerHTML=`
+    <div class="route-eyebrow">${r.type}</div>
+    <h2 class="route-h">${r.name}</h2>
+    <div class="route-meta-row">
+      <span class="meta-chip"><strong>運賃</strong> ${r.fare}</span>
+      <span class="meta-chip"><strong>運行日</strong> ${r.days}</span>
+      ${r.note?`<span class="meta-chip">${r.note}</span>`:''}
+      <span class="live-dot">運行情報</span>
+    </div>
+
+    ${nx?`
+    <div class="next-dep">
+      <div class="next-dep-label">次の発車</div>
+      <div>
+        <div class="next-dep-time">${p(nx.h)}:${p(nx.m)}</div>
+        <div class="next-dep-detail">
+          <div class="stop-name">${curStop} 発</div>
+          <div class="countdown">あと ${mu} 分</div>
+        </div>
+      </div>
+      <div class="next-dep-fare">
+        <div class="fare-amount">${r.fare.includes('円')?r.fare.replace('均一',''):'—'}</div>
+        <div class="fare-label">運賃</div>
+      </div>
+    </div>`:`
+    <div style="padding:1.2rem 1.5rem;border:1px solid var(--rule);margin-bottom:1.5rem;background:var(--paper-warm)">
+      <div style="font-family:'DM Sans',sans-serif;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-light);margin-bottom:0.3rem">本日の運行</div>
+      <div style="font-family:'DM Serif Display',serif;font-size:1.1rem;color:var(--ink-mid)">本日の運行は終了しました</div>
+    </div>`}
+
+    <div class="stop-row">
+      <span class="stop-row-label">バス停</span>
+      ${sNames.map(s=>`<button class="stop-pill ${s===curStop?'active':''}" onclick="changeStop('${s}')">${s}</button>`).join('')}
+    </div>
+
+    <div class="view-row">
+      <span class="view-label">表示形式</span>
+      <div class="view-toggle">
+        <button class="view-opt ${curView==='grid'?'active':''}" onclick="changeView('grid')">時刻グリッド</button>
+        <button class="view-opt ${curView==='list'?'active':''}" onclick="changeView('list')">一覧</button>
+      </div>
+    </div>
+
+    ${curView==='grid'?grid:list}
+
+    <div class="info-footer">
+      <div class="info-col"><div class="info-k">運行日</div><div class="info-v">${r.days}</div></div>
+      <div class="info-col"><div class="info-k">運賃</div><div class="info-v">${r.fare}</div></div>
+      <div class="info-col"><div class="info-k">備考</div><div class="info-v">${r.note||'—'}</div></div>
+      <div class="info-col"><div class="info-k">データ</div><div class="info-v" style="font-size:0.72rem">長野市 GTFS-JP<br>オープンデータ</div></div>
+    </div>`;
+    
+  // inject fav toggle button
+  const stopRow = mc.querySelector('.stop-row');
+  if (stopRow) {
+    const favBtn = document.createElement('button');
+    favBtn.id = 'fav-btn-current';
+    favBtn.className = 'fav-toggle-btn' + (isFav(curRoute, curStop) ? ' is-fav' : '');
+    favBtn.innerHTML = isFav(curRoute, curStop) ? '★ 登録済み' : '☆ お気に入り登録';
+    favBtn.style.marginBottom = '1.2rem';
+    favBtn.onclick = () => toggleFav(curRoute, curStop);
+    stopRow.insertAdjacentElement('afterend', favBtn);
+  }
+}
+
+
+// ── FAVORITES ──
+function loadFavs() {
+  try { return JSON.parse(localStorage.getItem('nagano_bus_favs') || '[]'); }
+  catch { return []; }
+}
+function saveFavs(favs) {
+  localStorage.setItem('nagano_bus_favs', JSON.stringify(favs));
+}
+function isFav(rid, sname) {
+  return loadFavs().some(f => f.rid === rid && f.stop === sname);
+}
+function toggleFav(rid, sname) {
+  let favs = loadFavs();
+  const idx = favs.findIndex(f => f.rid === rid && f.stop === sname);
+  if (idx >= 0) {
+    favs.splice(idx, 1);
+  } else {
+    favs.push({ rid, stop: sname, addedAt: Date.now() });
+  }
+  saveFavs(favs);
+  const btn = document.getElementById('fav-btn-current');
+  if (btn) {
+    const now = isFav(rid, sname);
+    btn.classList.toggle('is-fav', now);
+    btn.innerHTML = now ? '★ 登録済み' : '☆ お気に入り登録';
+  }
+}
+function renderFavPage() {
+  const favs = loadFavs();
+  const container = document.getElementById('favList');
+  if (!container) return;
+  if (!favs.length) {
+    container.innerHTML = `
+      <div class="fav-empty">
+        <div class="fav-empty-icon">☆</div>
+        <div class="fav-empty-title">登録がありません</div>
+        <div class="fav-empty-body">時刻表でバス停を選び<br>「☆ お気に入り登録」を押してください</div>
+      </div>`;
+    return;
+  }
+  container.innerHTML = favs.map(f => {
+    const r = ROUTES[f.rid];
+    if (!r) return '';
+    const col = r.pip;
+    const times = r.weekday[f.stop] || [];
+    const nx = nextBus(times);
+    const nxStr = nx ? `${p(nx.h)}:${p(nx.m)}` : '本日終了';
+    const mu = nx?mUntil(nx):0;
+    const muStr = nx ? `あと ${mu} 分` : '';
+    return `
+      <div class="fav-card">
+        <div class="fav-card-left">
+          <div class="fav-stop-name">
+            <span style="width:7px;height:7px;background:${col};border-radius:50%;display:inline-block;flex-shrink:0"></span>
+            ${f.stop}
+          </div>
+          <div class="fav-route-name">${r.name}</div>
+          <div class="fav-next">${nxStr}</div>
+          <div class="fav-next-sub">${muStr}</div>
+        </div>
+        <div class="fav-card-right">
+          <button class="fav-go-btn" onclick="goToFav('${f.rid}','${f.stop}')">時刻表 →</button>
+          <button class="fav-remove-btn" onclick="removeFav('${f.rid}','${f.stop}')" title="削除">✕</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+function goToFav(rid, sname) {
+  const btn = document.querySelectorAll('.nav-btn')[0];
+  if(btn) btn.click();
+  setTimeout(() => selectRoute(rid, sname), 50);
+}
+function removeFav(rid, sname) {
+  let favs = loadFavs().filter(f => !(f.rid === rid && f.stop === sname));
+  saveFavs(favs);
+  renderFavPage();
+}
+
+function changeStop(s) { curStop=s; renderContent(); }
+function changeView(v) { curView=v; renderContent(); }
+setInterval(() => { if(curRoute) renderContent(); }, 60000);
+
+// Kickstart
+window.onload = initApp;
+</script>
+
+<!-- DISCLAIMER -->
+<footer style="border-top:1px solid var(--rule);padding:2rem 2.4rem;margin-top:2rem;background:var(--paper-warm)">
+  <div style="max-width:860px;margin:0 auto">
+    <div style="font-family:'DM Sans',sans-serif;font-size:0.58rem;font-weight:500;letter-spacing:0.18em;text-transform:uppercase;color:var(--ink-light);margin-bottom:0.7rem">免責事項</div>
+    <p style="font-family:'DM Sans',sans-serif;font-size:0.72rem;line-height:1.85;color:var(--ink-light)">
+      本サービスで表示する時刻データは、長野市が公開するGTFS-JPオープンデータをもとにしていますが、内容の正確性・完全性・最新性を保証するものではありません。
+      ダイヤ改正・臨時運休・遅延等により実際の運行と異なる場合があります。
+      乗車の際は必ず長野市公式サイトまたは各運行事業者の最新情報をご確認ください。
+      本サービスの利用により生じたいかなる損害についても、制作者は責任を負いかねます。
+    </p>
+    <p style="font-family:'DM Sans',sans-serif;font-size:0.72rem;line-height:1.85;color:var(--ink-light);margin-top:0.8rem">
+      <strong style="color:var(--ink-mid);font-weight:500">【対応路線について】</strong>
+      本サービスは長野市が公開するデータに基づき、市営バス・乗合タクシー・廃止代替路線バスを対象としています。
+      アルピコ交通の長野市内路線バスはGTFSオープンデータが公開されていないため、現時点では非対応です。
+      アルピコ交通の時刻・路線情報は<a href="https://www.alpico.co.jp/traffic/local/" target="_blank" rel="noopener" style="color:var(--blue)">アルピコ交通公式サイト</a>をご確認ください。
+    </p>
+    <div style="margin-top:1rem;display:flex;gap:1.5rem;flex-wrap:wrap">
+      <a href="https://www.city.nagano.nagano.jp/n042600/kotsu/p001144.html" target="_blank" rel="noopener"
+         style="font-family:'DM Sans',sans-serif;font-size:0.65rem;color:var(--blue);text-decoration:underline;text-underline-offset:2px">
+        長野市 バス情報データ（公式）
+      </a>
+      <span style="font-family:'DM Sans',sans-serif;font-size:0.65rem;color:var(--ink-light)">
+        データ提供：長野市（CC BY 4.0）／ 地図：© OpenStreetMap contributors
+      </span>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
