@@ -1,0 +1,23 @@
+{
+  "name": "長野市バス時刻",
+  "short_name": "長野市バス",
+  "description": "長野市の最新GTFSオープンデータを使用した、リアルタイムなバス時刻表アプリです。",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f5f4f0",
+  "theme_color": "#c8460a",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
